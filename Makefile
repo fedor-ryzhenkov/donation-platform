@@ -1,4 +1,4 @@
-.PHONY: help up down restart logs build clean dev dev-frontend dev-backend
+.PHONY: help up down restart logs build clean seed dev dev-frontend dev-backend
 
 help:
 	@echo "Available commands:"
@@ -8,6 +8,7 @@ help:
 	@echo "  make logs        - View logs from all services"
 	@echo "  make build       - Build/rebuild Docker images"
 	@echo "  make clean       - Stop containers and remove volumes"
+	@echo "  make seed        - Seed the database with sample data"
 	@echo "  make dev         - Start both backend and frontend in development mode"
 	@echo "  make dev-backend - Start only backend in development mode"
 	@echo "  make dev-frontend- Start only frontend in development mode"
@@ -33,6 +34,10 @@ build:
 clean:
 	docker-compose down -v
 	@echo "All containers and volumes removed"
+
+seed:
+	docker-compose exec backend npm run seed
+	@echo "Database seeded with sample data"
 
 dev:
 	@echo "Starting development servers..."
