@@ -1,5 +1,13 @@
 import { initDatabase, sequelize } from './database';
 import { Influencer, Campaign, Donor, Donation } from './models';
+import { User } from "./models/User";
+
+await User.bulkCreate([
+  { username: "admin", role: "admin", password: "1234" },
+  { username: "donor1", role: "donor", password: "1234" },
+  { username: "influencer1", role: "influencer", password: "1234" }
+]);
+
 
 async function seed() {
   await initDatabase();

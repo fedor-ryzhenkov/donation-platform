@@ -9,6 +9,11 @@ import {
   statsRouter,
 } from './routers';
 
+import authRoutes from "./routers/auth.routes";
+
+
+
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -17,11 +22,14 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
+app.use("/auth", authRoutes);
 app.use('/api/influencers', influencersRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/donors', donorsRouter);
 app.use('/api/donations', donationsRouter);
 app.use('/api/stats', statsRouter);
+
+app.use("/auth", authRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -31,8 +39,8 @@ app.get('/api/health', (_req, res) => {
 // Start server
 async function start() {
   await initDatabase();
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 
