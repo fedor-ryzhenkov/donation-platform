@@ -1,25 +1,22 @@
 import { Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { authApi, influencersApi, campaignsApi, donationsApi } from '../../api/client'
 import type { Influencer, Campaign, Donation, CreateCampaign, UpdateCampaign, CampaignStatus } from '../../api/client'
-import PasswordGate from '../../components/PasswordGate'
 
 export default function InfluencerDashboard() {
-  const [influencers, setInfluencers] = useState<Influencer[]>([])
-  const [selectedInfluencer, setSelectedInfluencer] = useState<Influencer | null>(null)
+  const [influencer, setInfluencer] = useState<Influencer | null>(null)
+  const [influencerId, setInfluencerId] = useState<number | null>(() => {
+    const raw = sessionStorage.getItem('influencer_id')
+    const n = raw ? parseInt(raw) : NaN
+    return Number.isFinite(n) ? n : null
+  })
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [donations, setDonations] = useState<Donation[]>([])
   const [loading, setLoading] = useState(true)
-  const [unlockedInfluencerIds, setUnlockedInfluencerIds] = useState<Set<number>>(() => {
-    const raw = sessionStorage.getItem('influencer_unlocked_ids')
-    if (!raw) return new Set()
-    try {
-      const parsed = JSON.parse(raw) as number[]
-      return new Set(parsed)
-    } catch {
-      return new Set()
-    }
-  })
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
+  const [loginForm, setLoginForm] = useState({ name: '', password: '' })
+  const [signupForm, setSignupForm] = useState({ name: '', bio: '', avatarUrl: '', password: '' })
+  const [authError, setAuthError] = useState<string | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
@@ -28,52 +25,84 @@ export default function InfluencerDashboard() {
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    loadInfluencers()
+    loadData()
   }, [])
 
-  useEffect(() => {
-    if (!selectedInfluencer) return
-    if (!unlockedInfluencerIds.has(selectedInfluencer.id)) return
-    loadInfluencerData(selectedInfluencer.id)
-  }, [selectedInfluencer, unlockedInfluencerIds])
-
-  async function loadInfluencers() {
+  const loadData = useCallback(async () => {
     try {
-      const data = await influencersApi.list()
-      setInfluencers(data)
-      if (data.length > 0) {
-        setSelectedInfluencer(data[0])
+      if (!influencerId) {
+        setInfluencer(null)
+        return
       }
-    } catch (error) {
-      console.error('Failed to load influencers:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function loadInfluencerData(influencerId: number) {
-    try {
-      const [campaignsData, donationsData] = await Promise.all([
+      const [inf, campaignsData, donationsData] = await Promise.all([
+        influencersApi.get(influencerId),
         campaignsApi.list({ influencerId }),
         donationsApi.list(),
       ])
+      setInfluencer(inf)
       setCampaigns(campaignsData)
-      // Filter donations for this influencer's campaigns
       const campaignIds = new Set(campaignsData.map(c => c.id))
       setDonations(donationsData.filter(d => campaignIds.has(d.campaignId)))
     } catch (error) {
       console.error('Failed to load influencer data:', error)
+      setInfluencer(null)
+    } finally {
+      setLoading(false)
+    }
+  }, [influencerId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setAuthError(null)
+    try {
+      const { id } = await authApi.loginInfluencer(loginForm.name, loginForm.password)
+      sessionStorage.setItem('influencer_id', String(id))
+      setInfluencerId(id)
+      setLoginForm({ name: '', password: '' })
+    } catch (error) {
+      console.error('Failed to login:', error)
+      setAuthError('Invalid name or password.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleSignup(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setAuthError(null)
+    try {
+      const created = await influencersApi.create({
+        name: signupForm.name,
+        bio: signupForm.bio,
+        avatarUrl: signupForm.avatarUrl || undefined,
+        password: signupForm.password,
+      })
+      sessionStorage.setItem('influencer_id', String(created.id))
+      setInfluencerId(created.id)
+      setInfluencer(created)
+      setSignupForm({ name: '', bio: '', avatarUrl: '', password: '' })
+    } catch (error) {
+      console.error('Failed to create influencer:', error)
+      setAuthError('Failed to create account.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
   async function handleCreateCampaign(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedInfluencer) return
+    if (!influencer) return
     
     setSubmitting(true)
     try {
       const newCampaign: CreateCampaign = {
-        influencerId: selectedInfluencer.id,
+        influencerId: influencer.id,
         title: formData.title,
         description: formData.description,
         goalAmount: parseFloat(formData.goalAmount),
@@ -81,7 +110,7 @@ export default function InfluencerDashboard() {
       await campaignsApi.create(newCampaign)
       setShowCreateModal(false)
       setFormData({ title: '', description: '', goalAmount: '' })
-      loadInfluencerData(selectedInfluencer.id)
+      loadData()
     } catch (error) {
       console.error('Failed to create campaign:', error)
     } finally {
@@ -104,9 +133,7 @@ export default function InfluencerDashboard() {
       await campaignsApi.update(editingCampaign.id, updateData)
       setShowEditModal(false)
       setEditingCampaign(null)
-      if (selectedInfluencer) {
-        loadInfluencerData(selectedInfluencer.id)
-      }
+      loadData()
     } catch (error) {
       console.error('Failed to update campaign:', error)
     } finally {
@@ -119,9 +146,7 @@ export default function InfluencerDashboard() {
     
     try {
       await campaignsApi.delete(id)
-      if (selectedInfluencer) {
-        loadInfluencerData(selectedInfluencer.id)
-      }
+      loadData()
     } catch (error) {
       console.error('Failed to delete campaign:', error)
     }
@@ -164,51 +189,6 @@ export default function InfluencerDashboard() {
     )
   }
 
-  if (selectedInfluencer && !unlockedInfluencerIds.has(selectedInfluencer.id)) {
-    return (
-      <>
-        <nav className="bg-white shadow-sm border-b border-surface-200">
-          <div className="container-page">
-            <div className="flex justify-between h-16 items-center">
-              <Link to="/" className="text-xl font-bold text-gradient font-display">
-                Donation Platform
-              </Link>
-              <div className="flex items-center gap-4">
-                {influencers.length > 0 && (
-                  <select
-                    value={selectedInfluencer?.id || ''}
-                    onChange={(e) => {
-                      const inf = influencers.find(i => i.id === parseInt(e.target.value))
-                      setSelectedInfluencer(inf || null)
-                    }}
-                    className="input w-48"
-                  >
-                    {influencers.map((inf) => (
-                      <option key={inf.id} value={inf.id}>{inf.name}</option>
-                    ))}
-                  </select>
-                )}
-                <span className="badge badge-secondary">Influencer Portal</span>
-              </div>
-            </div>
-          </div>
-        </nav>
-        <PasswordGate
-          title={`${selectedInfluencer.name}`}
-          subtitle="Enter this influencer account password to continue."
-          submitLabel="Enter"
-          onVerify={async (password) => {
-            await authApi.verifyInfluencer(selectedInfluencer.id, password)
-            const next = new Set(unlockedInfluencerIds)
-            next.add(selectedInfluencer.id)
-            sessionStorage.setItem('influencer_unlocked_ids', JSON.stringify(Array.from(next)))
-            setUnlockedInfluencerIds(next)
-          }}
-        />
-      </>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-surface-50">
       <nav className="bg-white shadow-sm border-b border-surface-200">
@@ -218,19 +198,24 @@ export default function InfluencerDashboard() {
               Donation Platform
             </Link>
             <div className="flex items-center gap-4">
-              {influencers.length > 0 && (
-                <select
-                  value={selectedInfluencer?.id || ''}
-                  onChange={(e) => {
-                    const inf = influencers.find(i => i.id === parseInt(e.target.value))
-                    setSelectedInfluencer(inf || null)
-                  }}
-                  className="input w-48"
-                >
-                  {influencers.map((inf) => (
-                    <option key={inf.id} value={inf.id}>{inf.name}</option>
-                  ))}
-                </select>
+              {influencer ? (
+                <>
+                  <span className="text-sm text-surface-600">Signed in as <span className="font-medium text-surface-900">{influencer.name}</span></span>
+                  <button
+                    onClick={() => {
+                      sessionStorage.removeItem('influencer_id')
+                      setInfluencerId(null)
+                      setInfluencer(null)
+                      setCampaigns([])
+                      setDonations([])
+                    }}
+                    className="btn btn-ghost text-sm"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <span className="text-sm text-surface-500">Not signed in</span>
               )}
               <span className="badge badge-secondary">Influencer Portal</span>
             </div>
@@ -239,15 +224,132 @@ export default function InfluencerDashboard() {
       </nav>
 
       <main className="container-page py-8">
-        {!selectedInfluencer ? (
+        {!influencer && (
+          <div className="card p-6 mb-8">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-lg font-semibold text-surface-950 font-display">
+                  {authMode === 'login' ? 'Log in' : 'Sign up'}
+                </h2>
+                <p className="text-sm text-surface-500 mt-1">
+                  {authMode === 'login'
+                    ? 'Use your influencer name as username.'
+                    : 'Create an influencer account to manage campaigns.'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setAuthError(null)
+                  setAuthMode(authMode === 'login' ? 'signup' : 'login')
+                }}
+                className="btn btn-ghost text-sm"
+              >
+                {authMode === 'login' ? 'Need an account?' : 'Already have an account?'}
+              </button>
+            </div>
+
+            {authMode === 'login' ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="label">Name (username)</label>
+                  <input
+                    type="text"
+                    value={loginForm.name}
+                    onChange={(e) => setLoginForm({ ...loginForm, name: e.target.value })}
+                    className="input"
+                    placeholder="Alex Gaming"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Password</label>
+                  <input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    className="input"
+                    placeholder="Enter password"
+                    required
+                  />
+                </div>
+                {authError && (
+                  <div className="text-sm text-error-700 bg-error-50 border border-error-200 rounded-lg p-3">
+                    {authError}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button type="submit" disabled={submitting} className="btn btn-primary">
+                    {submitting ? 'Logging in...' : 'Log in'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSignup} className="space-y-4">
+                <div>
+                  <label className="label">Name (username)</label>
+                  <input
+                    type="text"
+                    value={signupForm.name}
+                    onChange={(e) => setSignupForm({ ...signupForm, name: e.target.value })}
+                    className="input"
+                    placeholder="Alex Gaming"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Bio</label>
+                  <textarea
+                    value={signupForm.bio}
+                    onChange={(e) => setSignupForm({ ...signupForm, bio: e.target.value })}
+                    className="input min-h-[100px]"
+                    placeholder="Tell supporters about you..."
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Avatar URL (optional)</label>
+                  <input
+                    type="url"
+                    value={signupForm.avatarUrl}
+                    onChange={(e) => setSignupForm({ ...signupForm, avatarUrl: e.target.value })}
+                    className="input"
+                    placeholder="https://..."
+                  />
+                </div>
+                <div>
+                  <label className="label">Password</label>
+                  <input
+                    type="password"
+                    value={signupForm.password}
+                    onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                    className="input"
+                    placeholder="Create a password"
+                    required
+                  />
+                </div>
+                {authError && (
+                  <div className="text-sm text-error-700 bg-error-50 border border-error-200 rounded-lg p-3">
+                    {authError}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button type="submit" disabled={submitting} className="btn btn-primary">
+                    {submitting ? 'Creating...' : 'Create account'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {!influencer ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-surface-100 rounded-full mx-auto mb-4 flex items-center justify-center">
               <svg className="w-8 h-8 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <p className="text-surface-500">No influencer profiles found</p>
-            <p className="text-surface-400 text-sm mt-1">Run the seed script to create sample data</p>
+            <p className="text-surface-500">Sign in to manage your campaigns</p>
           </div>
         ) : (
           <>
@@ -255,13 +357,13 @@ export default function InfluencerDashboard() {
             <div className="card p-6 mb-8">
               <div className="flex items-center gap-4">
                 <img
-                  src={selectedInfluencer.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedInfluencer.name}`}
-                  alt={selectedInfluencer.name}
+                  src={influencer.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${influencer.name}`}
+                  alt={influencer.name}
                   className="w-16 h-16 rounded-full bg-surface-200"
                 />
                 <div>
-                  <h1 className="text-2xl font-bold text-surface-950 font-display">{selectedInfluencer.name}</h1>
-                  <p className="text-surface-600">{selectedInfluencer.bio}</p>
+                  <h1 className="text-2xl font-bold text-surface-950 font-display">{influencer.name}</h1>
+                  <p className="text-surface-600">{influencer.bio}</p>
                 </div>
               </div>
             </div>

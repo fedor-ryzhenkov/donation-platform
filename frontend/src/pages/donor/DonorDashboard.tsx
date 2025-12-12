@@ -1,71 +1,79 @@
 import { Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { authApi, campaignsApi, donorsApi, donationsApi } from '../../api/client'
 import type { Campaign, Donor, CreateDonation } from '../../api/client'
-import PasswordGate from '../../components/PasswordGate'
 
 export default function DonorDashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [donors, setDonors] = useState<Donor[]>([])
-  const [selectedDonor, setSelectedDonor] = useState<Donor | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [unlockedDonorIds, setUnlockedDonorIds] = useState<Set<number>>(() => {
-    const raw = sessionStorage.getItem('donor_unlocked_ids')
-    if (!raw) return new Set()
-    try {
-      const parsed = JSON.parse(raw) as number[]
-      return new Set(parsed)
-    } catch {
-      return new Set()
-    }
+  const [donor, setDonor] = useState<Donor | null>(null)
+  const [donorId, setDonorId] = useState<number | null>(() => {
+    const raw = sessionStorage.getItem('donor_id')
+    const n = raw ? parseInt(raw) : NaN
+    return Number.isFinite(n) ? n : null
   })
+  const [loading, setLoading] = useState(true)
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' })
+  const [signupForm, setSignupForm] = useState({ name: '', email: '', password: '' })
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [showDonateModal, setShowDonateModal] = useState(false)
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
   const [donationForm, setDonationForm] = useState({ amount: '', message: '' })
   const [submitting, setSubmitting] = useState(false)
-  const [showNewDonorForm, setShowNewDonorForm] = useState(false)
-  const [newDonorForm, setNewDonorForm] = useState({ name: '', email: '', password: '' })
+  const [authError, setAuthError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
-      const [campaignsData, donorsData] = await Promise.all([
+      const [campaignsData, donorData] = await Promise.all([
         campaignsApi.list(),
-        donorsApi.list(),
+        donorId ? donorsApi.get(donorId) : Promise.resolve(null),
       ])
       setCampaigns(campaignsData)
-      setDonors(donorsData)
-      if (donorsData.length > 0) {
-        setSelectedDonor(donorsData[0])
-      }
+      setDonor(donorData)
     } catch (error) {
       console.error('Failed to load data:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [donorId])
 
-  async function handleCreateDonor(e: React.FormEvent) {
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
+    setAuthError(null)
     try {
-      const newDonor = await donorsApi.create(newDonorForm)
-      setDonors([newDonor, ...donors])
-      setSelectedDonor(newDonor)
-      const next = new Set(unlockedDonorIds)
-      next.add(newDonor.id)
-      sessionStorage.setItem('donor_unlocked_ids', JSON.stringify(Array.from(next)))
-      setUnlockedDonorIds(next)
-      setShowNewDonorForm(false)
-      setNewDonorForm({ name: '', email: '', password: '' })
+      const newDonor = await donorsApi.create(signupForm)
+      sessionStorage.setItem('donor_id', String(newDonor.id))
+      setDonorId(newDonor.id)
+      setDonor(newDonor)
+      setSignupForm({ name: '', email: '', password: '' })
     } catch (error) {
       console.error('Failed to create donor:', error)
-      alert('Failed to create account. Email might already be in use.')
+      setAuthError('Failed to create account.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setAuthError(null)
+    try {
+      const { id } = await authApi.loginDonor(loginForm.email, loginForm.password)
+      sessionStorage.setItem('donor_id', String(id))
+      setDonorId(id)
+      const loaded = await donorsApi.get(id)
+      setDonor(loaded)
+      setLoginForm({ email: '', password: '' })
+    } catch (error) {
+      console.error('Failed to login:', error)
+      setAuthError('Invalid email or password.')
     } finally {
       setSubmitting(false)
     }
@@ -73,12 +81,12 @@ export default function DonorDashboard() {
 
   async function handleDonate(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedDonor || !selectedCampaign) return
+    if (!donor || !selectedCampaign) return
 
     setSubmitting(true)
     try {
       const donation: CreateDonation = {
-        donorId: selectedDonor.id,
+        donorId: donor.id,
         campaignId: selectedCampaign.id,
         amount: parseFloat(donationForm.amount),
         message: donationForm.message,
@@ -102,10 +110,7 @@ export default function DonorDashboard() {
   }
 
   function openDonateModal(campaign: Campaign) {
-    if (!selectedDonor) {
-      alert('Please select or create a donor account first.')
-      return
-    }
+    if (!donor) return
     setSelectedCampaign(campaign)
     setShowDonateModal(true)
   }
@@ -138,66 +143,6 @@ export default function DonorDashboard() {
     )
   }
 
-  if (selectedDonor && !unlockedDonorIds.has(selectedDonor.id)) {
-    return (
-      <>
-        <nav className="bg-white shadow-sm border-b border-surface-200">
-          <div className="container-page">
-            <div className="flex justify-between h-16 items-center">
-              <Link to="/" className="text-xl font-bold text-gradient font-display">
-                Donation Platform
-              </Link>
-              <div className="flex items-center gap-4">
-                {selectedDonor ? (
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedDonor.id}
-                      onChange={(e) => {
-                        const donor = donors.find(d => d.id === parseInt(e.target.value))
-                        setSelectedDonor(donor || null)
-                      }}
-                      className="input w-40"
-                    >
-                      {donors.map((donor) => (
-                        <option key={donor.id} value={donor.id}>{donor.name}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => setShowNewDonorForm(true)}
-                      className="btn btn-ghost text-sm"
-                    >
-                      + New
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowNewDonorForm(true)}
-                    className="btn btn-outline"
-                  >
-                    Create Account
-                  </button>
-                )}
-                <span className="badge badge-success">Donor Portal</span>
-              </div>
-            </div>
-          </div>
-        </nav>
-        <PasswordGate
-          title={`${selectedDonor.name}`}
-          subtitle="Enter this donor account password to continue."
-          submitLabel="Enter"
-          onVerify={async (password) => {
-            await authApi.verifyDonor(selectedDonor.id, password)
-            const next = new Set(unlockedDonorIds)
-            next.add(selectedDonor.id)
-            sessionStorage.setItem('donor_unlocked_ids', JSON.stringify(Array.from(next)))
-            setUnlockedDonorIds(next)
-          }}
-        />
-      </>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-surface-50">
       <nav className="bg-white shadow-sm border-b border-surface-200">
@@ -207,34 +152,22 @@ export default function DonorDashboard() {
               Donation Platform
             </Link>
             <div className="flex items-center gap-4">
-              {selectedDonor ? (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={selectedDonor.id}
-                    onChange={(e) => {
-                      const donor = donors.find(d => d.id === parseInt(e.target.value))
-                      setSelectedDonor(donor || null)
-                    }}
-                    className="input w-40"
-                  >
-                    {donors.map((donor) => (
-                      <option key={donor.id} value={donor.id}>{donor.name}</option>
-                    ))}
-                  </select>
+              {donor ? (
+                <>
+                  <span className="text-sm text-surface-600">Signed in as <span className="font-medium text-surface-900">{donor.name}</span></span>
                   <button
-                    onClick={() => setShowNewDonorForm(true)}
+                    onClick={() => {
+                      sessionStorage.removeItem('donor_id')
+                      setDonorId(null)
+                      setDonor(null)
+                    }}
                     className="btn btn-ghost text-sm"
                   >
-                    + New
+                    Logout
                   </button>
-                </div>
+                </>
               ) : (
-                <button
-                  onClick={() => setShowNewDonorForm(true)}
-                  className="btn btn-outline"
-                >
-                  Create Account
-                </button>
+                <span className="text-sm text-surface-500">Not signed in</span>
               )}
               <span className="badge badge-success">Donor Portal</span>
             </div>
@@ -243,17 +176,126 @@ export default function DonorDashboard() {
       </nav>
 
       <main className="container-page py-8">
+        {!donor && (
+          <div className="card p-6 mb-8">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-lg font-semibold text-surface-950 font-display">
+                  {authMode === 'login' ? 'Log in' : 'Sign up'}
+                </h2>
+                <p className="text-sm text-surface-500 mt-1">
+                  {authMode === 'login'
+                    ? 'Use your email as username.'
+                    : 'Create a donor account to start donating.'}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setAuthError(null)
+                  setAuthMode(authMode === 'login' ? 'signup' : 'login')
+                }}
+                className="btn btn-ghost text-sm"
+              >
+                {authMode === 'login' ? 'Need an account?' : 'Already have an account?'}
+              </button>
+            </div>
+
+            {authMode === 'login' ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="label">Email (username)</label>
+                  <input
+                    type="email"
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
+                    className="input"
+                    placeholder="john@example.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Password</label>
+                  <input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    className="input"
+                    placeholder="Enter password"
+                    required
+                  />
+                </div>
+                {authError && (
+                  <div className="text-sm text-error-700 bg-error-50 border border-error-200 rounded-lg p-3">
+                    {authError}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button type="submit" disabled={submitting} className="btn btn-primary">
+                    {submitting ? 'Logging in...' : 'Log in'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSignup} className="space-y-4">
+                <div>
+                  <label className="label">Your Name</label>
+                  <input
+                    type="text"
+                    value={signupForm.name}
+                    onChange={(e) => setSignupForm({ ...signupForm, name: e.target.value })}
+                    className="input"
+                    placeholder="John Smith"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Email (username)</label>
+                  <input
+                    type="email"
+                    value={signupForm.email}
+                    onChange={(e) => setSignupForm({ ...signupForm, email: e.target.value })}
+                    className="input"
+                    placeholder="john@example.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Password</label>
+                  <input
+                    type="password"
+                    value={signupForm.password}
+                    onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
+                    className="input"
+                    placeholder="Create a password"
+                    required
+                  />
+                </div>
+                {authError && (
+                  <div className="text-sm text-error-700 bg-error-50 border border-error-200 rounded-lg p-3">
+                    {authError}
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button type="submit" disabled={submitting} className="btn btn-primary">
+                    {submitting ? 'Creating...' : 'Create account'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-surface-950 font-display">Browse Campaigns</h1>
           <p className="text-surface-500 mt-2">Discover campaigns from your favorite creators and make a difference</p>
         </div>
 
         {/* My Donation History */}
-        {selectedDonor && selectedDonor.donations && selectedDonor.donations.length > 0 && (
+        {donor && donor.donations && donor.donations.length > 0 && (
           <div className="card p-6 mb-8">
             <h2 className="text-lg font-semibold text-surface-950 mb-4 font-display">My Recent Donations</h2>
             <div className="flex gap-4 overflow-x-auto pb-2">
-              {selectedDonor.donations.slice(0, 5).map((donation) => (
+              {donor.donations.slice(0, 5).map((donation) => (
                 <div key={donation.id} className="shrink-0 bg-surface-50 rounded-lg p-4 min-w-[200px]">
                   <p className="font-semibold text-success-600">{formatCurrency(donation.amount)}</p>
                   <p className="text-sm text-surface-600 truncate">{donation.campaign?.title}</p>
@@ -368,10 +410,10 @@ export default function DonorDashboard() {
                   
                   <button 
                     onClick={() => openDonateModal(campaign)}
-                    disabled={campaign.status !== 'active'}
+                    disabled={campaign.status !== 'active' || !donor}
                     className="btn btn-primary w-full disabled:opacity-50"
                   >
-                    {campaign.status === 'active' ? 'Donate Now' : 'Campaign Ended'}
+                    {!donor ? 'Log in to donate' : (campaign.status === 'active' ? 'Donate Now' : 'Campaign Ended')}
                   </button>
                 </div>
               </div>
@@ -439,12 +481,12 @@ export default function DonorDashboard() {
                   />
                 </div>
 
-                {selectedDonor && (
+                {donor && (
                   <div className="bg-surface-50 rounded-lg p-4">
                     <p className="text-sm text-surface-600">
-                      Donating as <span className="font-medium text-surface-900">{selectedDonor.name}</span>
+                      Donating as <span className="font-medium text-surface-900">{donor.name}</span>
                     </p>
-                    <p className="text-xs text-surface-500">{selectedDonor.email}</p>
+                    <p className="text-xs text-surface-500">{donor.email}</p>
                   </div>
                 )}
               </div>
@@ -466,74 +508,6 @@ export default function DonorDashboard() {
                   className="btn btn-primary"
                 >
                   {submitting ? 'Processing...' : `Donate ${donationForm.amount ? formatCurrency(parseFloat(donationForm.amount)) : ''}`}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* New Donor Modal */}
-      {showNewDonorForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="card w-full max-w-md">
-            <div className="p-6 border-b border-surface-200">
-              <h2 className="text-xl font-semibold text-surface-950 font-display">Create Donor Account</h2>
-              <p className="text-sm text-surface-500 mt-1">Enter your details to start donating</p>
-            </div>
-            <form onSubmit={handleCreateDonor}>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="label">Your Name</label>
-                  <input
-                    type="text"
-                    value={newDonorForm.name}
-                    onChange={(e) => setNewDonorForm({ ...newDonorForm, name: e.target.value })}
-                    className="input"
-                    placeholder="John Smith"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="label">Email Address</label>
-                  <input
-                    type="email"
-                    value={newDonorForm.email}
-                    onChange={(e) => setNewDonorForm({ ...newDonorForm, email: e.target.value })}
-                    className="input"
-                    placeholder="john@example.com"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="label">Password</label>
-                  <input
-                    type="password"
-                    value={newDonorForm.password}
-                    onChange={(e) => setNewDonorForm({ ...newDonorForm, password: e.target.value })}
-                    className="input"
-                    placeholder="Create a password"
-                    required
-                  />
-                </div>
-              </div>
-              <div className="p-6 border-t border-surface-200 flex gap-3 justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNewDonorForm(false)
-                    setNewDonorForm({ name: '', email: '', password: '' })
-                  }}
-                  className="btn btn-ghost"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn btn-primary"
-                >
-                  {submitting ? 'Creating...' : 'Create Account'}
                 </button>
               </div>
             </form>

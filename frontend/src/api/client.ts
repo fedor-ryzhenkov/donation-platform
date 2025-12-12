@@ -29,6 +29,10 @@ export const authApi = {
     request<void>(`/auth/influencers/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
   verifyDonor: (id: number, password: string) =>
     request<void>(`/auth/donors/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
+  loginDonor: (email: string, password: string) =>
+    request<{ id: number }>('/auth/donors/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  loginInfluencer: (name: string, password: string) =>
+    request<{ id: number }>('/auth/influencers/login', { method: 'POST', body: JSON.stringify({ name, password }) }),
 }
 
 // Influencers
