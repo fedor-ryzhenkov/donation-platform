@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { Donor, Donation, Campaign } from '../models';
 import { hashPassword } from '../auth/password';
+import { signAuthToken } from '../auth/jwt';
+import { getAuthSecret, requireRole, requireAuth } from '../auth/middleware';
 
 const router = Router();
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 // GET /api/donors - List all donors
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', requireRole('admin'), async (_req: Request, res: Response) => {
   const donors = await Donor.findAll({
     include: [{ model: Donation, as: 'donations', include: [{ model: Campaign, as: 'campaign' }] }],
     order: [['createdAt', 'DESC']],
@@ -30,11 +33,31 @@ router.post('/', async (req: Request, res: Response) => {
   }
   const { salt, hash } = hashPassword(password);
   const donor = await Donor.create({ name, email, passwordSalt: salt, passwordHash: hash });
-  res.status(201).json(donor);
+  const token = signAuthToken({
+    secret: getAuthSecret(),
+    role: 'donor',
+    subject: donor.id,
+    ttlSeconds: TOKEN_TTL_SECONDS,
+  });
+  res.status(201).json({ ...donor.toJSON(), token });
 });
 
 // GET /api/donors/:id - Get single donor
 router.get('/:id', async (req: Request, res: Response) => {
+  if (!req.auth) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Invalid donor id' });
+    return;
+  }
+  if (req.auth.role !== 'admin' && !(req.auth.role === 'donor' && req.auth.subject === id)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+
   const donor = await Donor.findByPk(req.params.id, {
     include: [{ model: Donation, as: 'donations', include: [{ model: Campaign, as: 'campaign' }] }],
   });
@@ -47,6 +70,20 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // PUT /api/donors/:id - Update donor
 router.put('/:id', async (req: Request, res: Response) => {
+  if (!req.auth) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Invalid donor id' });
+    return;
+  }
+  if (req.auth.role !== 'admin' && !(req.auth.role === 'donor' && req.auth.subject === id)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+
   const donor = await Donor.findByPk(req.params.id);
   if (!donor) {
     res.status(404).json({ error: 'Donor not found' });
@@ -63,7 +100,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/donors/:id - Delete donor
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) => {
   const donor = await Donor.findByPk(req.params.id);
   if (!donor) {
     res.status(404).json({ error: 'Donor not found' });

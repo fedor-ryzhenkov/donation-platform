@@ -1,9 +1,24 @@
 const API_BASE = '/api'
+const AUTH_TOKEN_KEY = 'auth_token'
+
+export function getAuthToken(): string | null {
+  return sessionStorage.getItem(AUTH_TOKEN_KEY)
+}
+
+export function setAuthToken(token: string) {
+  sessionStorage.setItem(AUTH_TOKEN_KEY, token)
+}
+
+export function clearAuthToken() {
+  sessionStorage.removeItem(AUTH_TOKEN_KEY)
+}
 
 async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const token = getAuthToken()
   const response = await fetch(`${API_BASE}${endpoint}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
     ...options,
@@ -24,15 +39,15 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
 // Auth
 export const authApi = {
   verifyAdmin: (password: string) =>
-    request<void>('/auth/admin', { method: 'POST', body: JSON.stringify({ password }) }),
+    request<{ token: string }>('/auth/admin', { method: 'POST', body: JSON.stringify({ password }) }),
   verifyInfluencer: (id: number, password: string) =>
-    request<void>(`/auth/influencers/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
+    request<{ token: string }>(`/auth/influencers/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
   verifyDonor: (id: number, password: string) =>
-    request<void>(`/auth/donors/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
+    request<{ token: string }>(`/auth/donors/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
   loginDonor: (email: string, password: string) =>
-    request<{ id: number }>('/auth/donors/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    request<{ id: number; token: string }>('/auth/donors/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   loginInfluencer: (name: string, password: string) =>
-    request<{ id: number }>('/auth/influencers/login', { method: 'POST', body: JSON.stringify({ name, password }) }),
+    request<{ id: number; token: string }>('/auth/influencers/login', { method: 'POST', body: JSON.stringify({ name, password }) }),
 }
 
 // Influencers
@@ -40,7 +55,7 @@ export const influencersApi = {
   list: () => request<Influencer[]>('/influencers'),
   get: (id: number) => request<Influencer>(`/influencers/${id}`),
   create: (data: CreateInfluencer) =>
-    request<Influencer>('/influencers', { method: 'POST', body: JSON.stringify(data) }),
+    request<Influencer & { token: string }>('/influencers', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: UpdateInfluencer) =>
     request<Influencer>(`/influencers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => request<void>(`/influencers/${id}`, { method: 'DELETE' }),
@@ -68,7 +83,7 @@ export const donorsApi = {
   list: () => request<Donor[]>('/donors'),
   get: (id: number) => request<Donor>(`/donors/${id}`),
   create: (data: CreateDonor) =>
-    request<Donor>('/donors', { method: 'POST', body: JSON.stringify(data) }),
+    request<Donor & { token: string }>('/donors', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: UpdateDonor) =>
     request<Donor>(`/donors/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: number) => request<void>(`/donors/${id}`, { method: 'DELETE' }),

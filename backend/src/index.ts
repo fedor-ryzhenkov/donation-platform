@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { initDatabase } from './database';
+import { attachAuth } from './auth/middleware';
 import {
   influencersRouter,
   campaignsRouter,
@@ -16,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(attachAuth);
 
 // Routes
 app.use('/api/influencers', influencersRouter);

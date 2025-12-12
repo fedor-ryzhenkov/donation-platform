@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
-import { authApi, campaignsApi, donorsApi, donationsApi } from '../../api/client'
+import { authApi, campaignsApi, donorsApi, donationsApi, setAuthToken, clearAuthToken } from '../../api/client'
 import type { Campaign, Donor, CreateDonation } from '../../api/client'
 
 export default function DonorDashboard() {
@@ -25,9 +25,15 @@ export default function DonorDashboard() {
 
   const loadData = useCallback(async () => {
     try {
+      const token = sessionStorage.getItem('donor_token')
+      if (token) setAuthToken(token)
       const [campaignsData, donorData] = await Promise.all([
         campaignsApi.list(),
-        donorId ? donorsApi.get(donorId) : Promise.resolve(null),
+        donorId
+          ? token
+            ? donorsApi.get(donorId)
+            : Promise.resolve(null)
+          : Promise.resolve(null),
       ])
       setCampaigns(campaignsData)
       setDonor(donorData)
@@ -49,6 +55,8 @@ export default function DonorDashboard() {
     try {
       const newDonor = await donorsApi.create(signupForm)
       sessionStorage.setItem('donor_id', String(newDonor.id))
+      sessionStorage.setItem('donor_token', newDonor.token)
+      setAuthToken(newDonor.token)
       setDonorId(newDonor.id)
       setDonor(newDonor)
       setSignupForm({ name: '', email: '', password: '' })
@@ -65,8 +73,10 @@ export default function DonorDashboard() {
     setSubmitting(true)
     setAuthError(null)
     try {
-      const { id } = await authApi.loginDonor(loginForm.email, loginForm.password)
+      const { id, token } = await authApi.loginDonor(loginForm.email, loginForm.password)
       sessionStorage.setItem('donor_id', String(id))
+      sessionStorage.setItem('donor_token', token)
+      setAuthToken(token)
       setDonorId(id)
       const loaded = await donorsApi.get(id)
       setDonor(loaded)
@@ -158,6 +168,8 @@ export default function DonorDashboard() {
                   <button
                     onClick={() => {
                       sessionStorage.removeItem('donor_id')
+                      sessionStorage.removeItem('donor_token')
+                      clearAuthToken()
                       setDonorId(null)
                       setDonor(null)
                     }}

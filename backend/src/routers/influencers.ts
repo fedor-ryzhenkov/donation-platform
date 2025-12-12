@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { Influencer, Campaign } from '../models';
 import { hashPassword } from '../auth/password';
+import { signAuthToken } from '../auth/jwt';
+import { getAuthSecret, requireRole } from '../auth/middleware';
 
 const router = Router();
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 // GET /api/influencers - List all influencers
 router.get('/', async (_req: Request, res: Response) => {
@@ -37,7 +40,13 @@ router.post('/', async (req: Request, res: Response) => {
     passwordSalt: salt,
     passwordHash: hash,
   });
-  res.status(201).json(influencer);
+  const token = signAuthToken({
+    secret: getAuthSecret(),
+    role: 'influencer',
+    subject: influencer.id,
+    ttlSeconds: TOKEN_TTL_SECONDS,
+  });
+  res.status(201).json({ ...influencer.toJSON(), token });
 });
 
 // GET /api/influencers/:id - Get single influencer
@@ -54,6 +63,20 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 // PUT /api/influencers/:id - Update influencer
 router.put('/:id', async (req: Request, res: Response) => {
+  if (!req.auth) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'Invalid influencer id' });
+    return;
+  }
+  if (req.auth.role !== 'admin' && !(req.auth.role === 'influencer' && req.auth.subject === id)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return;
+  }
+
   const influencer = await Influencer.findByPk(req.params.id);
   if (!influencer) {
     res.status(404).json({ error: 'Influencer not found' });
@@ -75,7 +98,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/influencers/:id - Delete influencer
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireRole('admin'), async (req: Request, res: Response) => {
   const influencer = await Influencer.findByPk(req.params.id);
   if (!influencer) {
     res.status(404).json({ error: 'Influencer not found' });

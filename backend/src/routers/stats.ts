@@ -1,11 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { Influencer, Campaign, Donor, Donation } from '../models';
 import { sequelize } from '../database';
+import { requireRole } from '../auth/middleware';
 
 const router = Router();
 
 // GET /api/stats - Platform statistics for admin
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', requireRole('admin'), async (_req: Request, res: Response) => {
   const [
     totalInfluencers,
     totalCampaigns,

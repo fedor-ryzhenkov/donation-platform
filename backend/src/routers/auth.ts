@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { Donor, Influencer } from '../models';
 import { verifyPassword } from '../auth/password';
+import { signAuthToken } from '../auth/jwt';
+import { getAuthSecret } from '../auth/middleware';
 
 const router = Router();
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 // POST /api/auth/donors/login - Login donor by email + password
 router.post('/donors/login', async (req: Request, res: Response) => {
@@ -28,7 +31,13 @@ router.post('/donors/login', async (req: Request, res: Response) => {
     return;
   }
 
-  res.json({ id: donor.id });
+  const token = signAuthToken({
+    secret: getAuthSecret(),
+    role: 'donor',
+    subject: donor.id,
+    ttlSeconds: TOKEN_TTL_SECONDS,
+  });
+  res.json({ id: donor.id, token });
 });
 
 // POST /api/auth/influencers/login - Login influencer by name + password
@@ -60,10 +69,16 @@ router.post('/influencers/login', async (req: Request, res: Response) => {
     return;
   }
 
-  res.json({ id: influencer.id });
+  const token = signAuthToken({
+    secret: getAuthSecret(),
+    role: 'influencer',
+    subject: influencer.id,
+    ttlSeconds: TOKEN_TTL_SECONDS,
+  });
+  res.json({ id: influencer.id, token });
 });
 
-// POST /api/auth/admin - Verify admin password
+// POST /api/auth/admin - Login admin (password) and issue token
 router.post('/admin', async (req: Request, res: Response) => {
   const { password } = req.body as { password?: string };
   const expected = process.env.ADMIN_PASSWORD || 'admin';
@@ -75,10 +90,16 @@ router.post('/admin', async (req: Request, res: Response) => {
     res.status(401).json({ error: 'Invalid password' });
     return;
   }
-  res.status(204).send();
+  const token = signAuthToken({
+    secret: getAuthSecret(),
+    role: 'admin',
+    subject: 0,
+    ttlSeconds: TOKEN_TTL_SECONDS,
+  });
+  res.json({ token });
 });
 
-// POST /api/auth/influencers/:id - Verify influencer password
+// POST /api/auth/influencers/:id - Verify influencer password (and issue token)
 router.post('/influencers/:id', async (req: Request, res: Response) => {
   const { password } = req.body as { password?: string };
   if (typeof password !== 'string' || password.length === 0) {
@@ -101,10 +122,16 @@ router.post('/influencers/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  res.status(204).send();
+  const token = signAuthToken({
+    secret: getAuthSecret(),
+    role: 'influencer',
+    subject: influencer.id,
+    ttlSeconds: TOKEN_TTL_SECONDS,
+  });
+  res.json({ token });
 });
 
-// POST /api/auth/donors/:id - Verify donor password
+// POST /api/auth/donors/:id - Verify donor password (and issue token)
 router.post('/donors/:id', async (req: Request, res: Response) => {
   const { password } = req.body as { password?: string };
   if (typeof password !== 'string' || password.length === 0) {
@@ -127,7 +154,13 @@ router.post('/donors/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  res.status(204).send();
+  const token = signAuthToken({
+    secret: getAuthSecret(),
+    role: 'donor',
+    subject: donor.id,
+    ttlSeconds: TOKEN_TTL_SECONDS,
+  });
+  res.json({ token });
 });
 
 export default router;

@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { authApi, statsApi, donationsApi, campaignsApi, influencersApi } from '../../api/client'
+import { authApi, statsApi, donationsApi, campaignsApi, influencersApi, setAuthToken, clearAuthToken } from '../../api/client'
 import type { Stats, Donation, Campaign, Influencer } from '../../api/client'
 import PasswordGate from '../../components/PasswordGate'
 
 export default function AdminDashboard() {
-  const initialUnlocked = sessionStorage.getItem('admin_unlocked') === 'true'
+  const initialUnlocked = typeof sessionStorage.getItem('admin_token') === 'string'
   const [unlocked, setUnlocked] = useState(initialUnlocked)
   const [stats, setStats] = useState<Stats | null>(null)
   const [donations, setDonations] = useState<Donation[]>([])
@@ -21,6 +21,8 @@ export default function AdminDashboard() {
 
   async function loadData() {
     try {
+      const token = sessionStorage.getItem('admin_token')
+      if (token) setAuthToken(token)
       const [statsData, donationsData, campaignsData, influencersData] = await Promise.all([
         statsApi.get(),
         donationsApi.list(),
@@ -33,6 +35,10 @@ export default function AdminDashboard() {
       setInfluencers(influencersData)
     } catch (error) {
       console.error('Failed to load data:', error)
+      // If auth is invalid, force re-auth.
+      setUnlocked(false)
+      sessionStorage.removeItem('admin_token')
+      clearAuthToken()
     } finally {
       setLoading(false)
     }
@@ -110,8 +116,9 @@ export default function AdminDashboard() {
         subtitle="Enter the admin password to continue."
         submitLabel="Enter"
         onVerify={async (password) => {
-          await authApi.verifyAdmin(password)
-          sessionStorage.setItem('admin_unlocked', 'true')
+          const { token } = await authApi.verifyAdmin(password)
+          sessionStorage.setItem('admin_token', token)
+          setAuthToken(token)
           setUnlocked(true)
           setLoading(true)
         }}
@@ -138,7 +145,19 @@ export default function AdminDashboard() {
             <Link to="/" className="text-xl font-bold text-gradient font-display">
               Donation Platform
             </Link>
-            <span className="badge badge-primary">Admin Dashboard</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem('admin_token')
+                  clearAuthToken()
+                  setUnlocked(false)
+                }}
+                className="btn btn-ghost text-sm"
+              >
+                Logout
+              </button>
+              <span className="badge badge-primary">Admin Dashboard</span>
+            </div>
           </div>
         </div>
       </nav>

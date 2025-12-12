@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
-import { authApi, influencersApi, campaignsApi, donationsApi } from '../../api/client'
+import { authApi, influencersApi, campaignsApi, donationsApi, setAuthToken, clearAuthToken } from '../../api/client'
 import type { Influencer, Campaign, Donation, CreateCampaign, UpdateCampaign, CampaignStatus } from '../../api/client'
 
 export default function InfluencerDashboard() {
@@ -24,16 +24,15 @@ export default function InfluencerDashboard() {
   const [editFormData, setEditFormData] = useState({ title: '', description: '', goalAmount: '', status: 'active' as CampaignStatus })
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
   const loadData = useCallback(async () => {
     try {
       if (!influencerId) {
         setInfluencer(null)
         return
       }
+      const token = sessionStorage.getItem('influencer_token')
+      if (!token) throw new Error('Not authenticated')
+      setAuthToken(token)
       const [inf, campaignsData, donationsData] = await Promise.all([
         influencersApi.get(influencerId),
         campaignsApi.list({ influencerId }),
@@ -60,8 +59,10 @@ export default function InfluencerDashboard() {
     setSubmitting(true)
     setAuthError(null)
     try {
-      const { id } = await authApi.loginInfluencer(loginForm.name, loginForm.password)
+      const { id, token } = await authApi.loginInfluencer(loginForm.name, loginForm.password)
       sessionStorage.setItem('influencer_id', String(id))
+      sessionStorage.setItem('influencer_token', token)
+      setAuthToken(token)
       setInfluencerId(id)
       setLoginForm({ name: '', password: '' })
     } catch (error) {
@@ -84,6 +85,8 @@ export default function InfluencerDashboard() {
         password: signupForm.password,
       })
       sessionStorage.setItem('influencer_id', String(created.id))
+      sessionStorage.setItem('influencer_token', created.token)
+      setAuthToken(created.token)
       setInfluencerId(created.id)
       setInfluencer(created)
       setSignupForm({ name: '', bio: '', avatarUrl: '', password: '' })
@@ -204,6 +207,8 @@ export default function InfluencerDashboard() {
                   <button
                     onClick={() => {
                       sessionStorage.removeItem('influencer_id')
+                      sessionStorage.removeItem('influencer_token')
+                      clearAuthToken()
                       setInfluencerId(null)
                       setInfluencer(null)
                       setCampaigns([])
