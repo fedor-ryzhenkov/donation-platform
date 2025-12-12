@@ -2,41 +2,72 @@ import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import InfluencerDashboard from './pages/influencer/InfluencerDashboard'
 import DonorDashboard from './pages/donor/DonorDashboard'
+import Login from './pages/Login'
+import Signup from './pages/SignUp'
+
+import './styles/LandingPage.css';
 
 function LandingPage() {
   return (
-    <div className="min-h-screen gradient-hero flex items-center justify-center">
-      <div className="text-center px-4">
-        <h1 className="text-5xl md:text-6xl font-bold text-white mb-4 font-display">
-          Influencer Donation Platform
-        </h1>
-        <p className="text-xl text-white/80 mb-12 max-w-2xl mx-auto">
-          Support your favorite creators and make a difference
-        </p>
+    <div className="landing-page">
+      <nav className="navbar">
+        <div className="nav-links">
+          <Link to="/" className="nav-link">Home</Link>
+          <Link to="/influencer" className="nav-link">Explore Campaigns</Link>
+          <Link to="/admin" className="nav-link">Admin Dashboard</Link>
+        </div>
+
+        <div className="auth-buttons">
+          <Link to="/login">
+            <button className="btn-signin">Log in</button>
+          </Link>
+          <Link to="/signup">
+            <button className="btn-signup">Sign up</button>
+          </Link>
+        </div>
+      </nav>
+
+      <div className="hero-section">
+        <div className="decorative-dot dot-yellow" style={{top: '2.5rem', left: '2.5rem'}}></div>
+        <div className="decorative-dot dot-yellow" style={{top: '5rem', right: '50%'}}></div>
+        <div className="decorative-dot dot-yellow" style={{bottom: '10rem', left: '1.25rem'}}></div>
+        <div className="decorative-dot dot-purple" style={{bottom: '5rem', right: '33.33%'}}></div>
+        <div className="decorative-dot dot-yellow" style={{top: '33.33%', right: '2.5rem'}}></div>
+        <div className="decorative-dot dot-yellow" style={{bottom: '2.5rem', right: '5rem'}}></div>
         
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link
-            to="/admin"
-            className="px-8 py-4 bg-white text-surface-800 rounded-xl font-semibold hover:bg-surface-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-          >
-            Admin Dashboard
-          </Link>
-          <Link
-            to="/influencer"
-            className="px-8 py-4 glass text-surface-800 rounded-xl font-semibold hover:bg-white/90 transition-all border border-white/50"
-          >
-            Influencer Portal
-          </Link>
-          <Link
-            to="/donor"
-            className="px-8 py-4 glass text-surface-800 rounded-xl font-semibold hover:bg-white/90 transition-all border border-white/50"
-          >
-            Donate Now
-          </Link>
+        <img src="/src/images/Vector.svg" alt="" className="star-decoration" style={{bottom: '12%', right: '15%', width: '24px'}} />
+        <img src="/src/images/Vector.svg" alt="" className="star-decoration" style={{top: '60%', left: '8%', width: '20px'}} />
+        <img src="/src/images/Vector.svg" alt="" className="star-decoration" style={{bottom: '10%', right: '30%', width: '28px'}} />
+        
+        <div className="hero-content">
+          <h2 className="hero-title">
+            <span className="highlight">Support </span> Your Favourite Creators Effortlessly
+          </h2>
+
+          <p className="hero-description">
+            Track campaigns, donate securely, and support influencers directly — all in one place.
+          </p>
+
+          <div className="cta-buttons">
+            <Link to="/influencer">
+              <button className="btn-influencer">Influencer Portal</button>
+            </Link>
+            <Link to="/donor">
+              <button className="btn-donate">Donate Now</button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="hero-image-container">
+          <img
+            src="/src/images/influencer.png"
+            alt="Creator"
+            className="hero-image"
+          />
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function App() {
@@ -44,6 +75,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/influencer" element={<InfluencerDashboard />} />
         <Route path="/donor" element={<DonorDashboard />} />
