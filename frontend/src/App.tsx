@@ -3,7 +3,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import InfluencerDashboard from './pages/influencer/InfluencerDashboard'
 import DonorDashboard from './pages/donor/DonorDashboard'
 import Login from './pages/Login'
-import Signup from './pages/Signup'
+import Signup from './pages/SignUp'
 
 import './styles/LandingPage.css';
 
