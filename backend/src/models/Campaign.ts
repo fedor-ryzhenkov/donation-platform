@@ -1,12 +1,12 @@
-import { DataTypes, Model, Optional } from 'sequelize';
+import { DataTypes, Model, Optional, BelongsToManyAddAssociationsMixin } from 'sequelize';
 import { sequelize } from '../database';
 import { Influencer } from './Influencer';
+import { CampaignInfluencer } from './CampaignInfluencer';
 
 export type CampaignStatus = 'active' | 'completed' | 'cancelled';
 
 interface CampaignAttributes {
   id: number;
-  influencerId: number;
   title: string;
   description: string;
   goalAmount: number;
@@ -16,11 +16,14 @@ interface CampaignAttributes {
   updatedAt?: Date;
 }
 
-interface CampaignCreationAttributes extends Optional<CampaignAttributes, 'id' | 'description' | 'currentAmount' | 'status'> {}
+interface CampaignCreationAttributes
+  extends Optional<CampaignAttributes, 'id' | 'description' | 'currentAmount' | 'status'> {}
 
-export class Campaign extends Model<CampaignAttributes, CampaignCreationAttributes> implements CampaignAttributes {
+export class Campaign
+  extends Model<CampaignAttributes, CampaignCreationAttributes>
+  implements CampaignAttributes
+{
   public id!: number;
-  public influencerId!: number;
   public title!: string;
   public description!: string;
   public goalAmount!: number;
@@ -28,56 +31,34 @@ export class Campaign extends Model<CampaignAttributes, CampaignCreationAttribut
   public status!: CampaignStatus;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+
+  // <-- Add these for TypeScript to know setCollaborators exists
+  public setCollaborators!: BelongsToManyAddAssociationsMixin<Influencer, number>;
 }
 
 Campaign.init(
   {
-    id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
-      primaryKey: true,
-    },
-    influencerId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      field: 'influencer_id',
-      references: {
-        model: Influencer,
-        key: 'id',
-      },
-    },
-    title: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-    },
-    description: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-      defaultValue: '',
-    },
-    goalAmount: {
-      type: DataTypes.FLOAT,
-      allowNull: false,
-      field: 'goal_amount',
-    },
-    currentAmount: {
-      type: DataTypes.FLOAT,
-      allowNull: false,
-      defaultValue: 0,
-      field: 'current_amount',
-    },
-    status: {
-      type: DataTypes.ENUM('active', 'completed', 'cancelled'),
-      allowNull: false,
-      defaultValue: 'active',
-    },
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    title: { type: DataTypes.STRING(255), allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: false, defaultValue: '' },
+    goalAmount: { type: DataTypes.FLOAT, allowNull: false, field: 'goal_amount' },
+    currentAmount: { type: DataTypes.FLOAT, allowNull: false, defaultValue: 0, field: 'current_amount' },
+    status: { type: DataTypes.ENUM('active', 'completed', 'cancelled'), allowNull: false, defaultValue: 'active' },
   },
-  {
-    sequelize,
-    tableName: 'campaigns',
-    underscored: true,
-  }
+  { sequelize, tableName: 'campaigns', underscored: true }
 );
 
-Campaign.belongsTo(Influencer, { foreignKey: 'influencerId', as: 'influencer' });
-Influencer.hasMany(Campaign, { foreignKey: 'influencerId', as: 'campaigns' });
+// Many-to-many relation
+Campaign.belongsToMany(Influencer, {
+  through: CampaignInfluencer,
+  as: 'collaborators',
+  foreignKey: 'campaignId',
+  otherKey: 'influencerId',
+});
+
+Influencer.belongsToMany(Campaign, {
+  through: CampaignInfluencer,
+  as: 'collaborations',
+  foreignKey: 'influencerId',
+  otherKey: 'campaignId',
+});

@@ -31,39 +31,17 @@ async function seed() {
 
   // Create Campaigns
   const campaigns = await Campaign.bulkCreate([
-    {
-      influencerId: influencers[0].id,
-      title: 'New Gaming Setup',
-      description: 'Help me upgrade my streaming setup to provide better quality content for you all!',
-      goalAmount: 5000,
-      currentAmount: 0,
-      status: 'active',
-    },
-    {
-      influencerId: influencers[0].id,
-      title: 'Charity Gaming Marathon',
-      description: '24-hour gaming marathon for charity. All proceeds go to local children hospital.',
-      goalAmount: 10000,
-      currentAmount: 0,
-      status: 'active',
-    },
-    {
-      influencerId: influencers[1].id,
-      title: 'Tech Lab Equipment',
-      description: 'Building a proper tech testing lab to bring you more in-depth reviews.',
-      goalAmount: 8000,
-      currentAmount: 0,
-      status: 'active',
-    },
-    {
-      influencerId: influencers[2].id,
-      title: 'Home Gym Build',
-      description: 'Creating a professional home gym to record better workout tutorials.',
-      goalAmount: 3000,
-      currentAmount: 0,
-      status: 'active',
-    },
+    { title: 'New Gaming Setup', description: 'Help me upgrade my streaming setup!', goalAmount: 5000 },
+    { title: 'Charity Gaming Marathon', description: '24-hour gaming marathon for charity', goalAmount: 10000 },
+    { title: 'Tech Lab Equipment', description: 'Building a proper tech testing lab', goalAmount: 8000 },
+    { title: 'Home Gym Build', description: 'Creating a professional home gym', goalAmount: 3000 },
   ]);
+
+  // Attach collaborators (many-to-many)
+  await campaigns[0].setCollaborators([influencers[0].id, influencers[1].id]);
+  await campaigns[1].setCollaborators([influencers[0].id]);
+  await campaigns[2].setCollaborators([influencers[1].id, influencers[2].id]);
+  await campaigns[3].setCollaborators([influencers[2].id]);
 
   // Create Donors
   const donors = await Donor.bulkCreate([
@@ -87,18 +65,10 @@ async function seed() {
 
   for (const data of donationData) {
     await Donation.create(data);
-    await Campaign.increment('currentAmount', {
-      by: data.amount,
-      where: { id: data.campaignId },
-    });
+    await Campaign.increment('currentAmount', { by: data.amount, where: { id: data.campaignId } });
   }
 
   console.log('Seed data created successfully!');
-  console.log(`- ${influencers.length} influencers`);
-  console.log(`- ${campaigns.length} campaigns`);
-  console.log(`- ${donors.length} donors`);
-  console.log(`- ${donationData.length} donations`);
-
   await sequelize.close();
 }
 
