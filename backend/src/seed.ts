@@ -2,13 +2,6 @@ import { initDatabase, sequelize } from './database';
 import { Influencer, Campaign, Donor, Donation } from './models';
 import { User } from "./models/User";
 
-await User.bulkCreate([
-  { username: "admin", role: "admin", password: "1234" },
-  { username: "donor1", role: "donor", password: "1234" },
-  { username: "influencer1", role: "influencer", password: "1234" }
-]);
-
-
 async function seed() {
   await initDatabase();
 
@@ -17,6 +10,14 @@ async function seed() {
   await Campaign.destroy({ where: {} });
   await Donor.destroy({ where: {} });
   await Influencer.destroy({ where: {} });
+  await User.destroy({ where: {} });
+
+  // Create Users
+  await User.bulkCreate([
+    { username: "admin", role: "admin", password: "1234" },
+    { username: "donor1", role: "donor", password: "1234" },
+    { username: "influencer1", role: "influencer", password: "1234" }
+  ]);
 
   // Create Influencers
   const influencers = await Influencer.bulkCreate([
