@@ -21,6 +21,16 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<T> {
   return response.json()
 }
 
+// Auth
+export const authApi = {
+  verifyAdmin: (password: string) =>
+    request<void>('/auth/admin', { method: 'POST', body: JSON.stringify({ password }) }),
+  verifyInfluencer: (id: number, password: string) =>
+    request<void>(`/auth/influencers/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
+  verifyDonor: (id: number, password: string) =>
+    request<void>(`/auth/donors/${id}`, { method: 'POST', body: JSON.stringify({ password }) }),
+}
+
 // Influencers
 export const influencersApi = {
   list: () => request<Influencer[]>('/influencers'),
@@ -95,12 +105,14 @@ export interface CreateInfluencer {
   name: string
   bio: string
   avatarUrl?: string
+  password: string
 }
 
 export interface UpdateInfluencer {
   name?: string
   bio?: string
   avatarUrl?: string
+  password?: string
 }
 
 export type CampaignStatus = 'active' | 'completed' | 'cancelled'
@@ -148,11 +160,13 @@ export interface Donor {
 export interface CreateDonor {
   name: string
   email: string
+  password: string
 }
 
 export interface UpdateDonor {
   name?: string
   email?: string
+  password?: string
 }
 
 export interface Donation {

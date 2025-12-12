@@ -23,13 +23,13 @@ function LandingPage() {
           </Link>
           <Link
             to="/influencer"
-            className="px-8 py-4 glass text-surface-800 rounded-xl font-semibold hover:bg-white/90 transition-all border border-white/50"
+            className="px-8 py-4 bg-white text-surface-800 rounded-xl font-semibold hover:bg-surface-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
           >
             Influencer Portal
           </Link>
           <Link
             to="/donor"
-            className="px-8 py-4 glass text-surface-800 rounded-xl font-semibold hover:bg-white/90 transition-all border border-white/50"
+            className="px-8 py-4 bg-white text-surface-800 rounded-xl font-semibold hover:bg-surface-50 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
           >
             Donate Now
           </Link>

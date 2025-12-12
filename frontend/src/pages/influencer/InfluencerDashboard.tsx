@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { influencersApi, campaignsApi, donationsApi } from '../../api/client'
+import { authApi, influencersApi, campaignsApi, donationsApi } from '../../api/client'
 import type { Influencer, Campaign, Donation, CreateCampaign, UpdateCampaign, CampaignStatus } from '../../api/client'
+import PasswordGate from '../../components/PasswordGate'
 
 export default function InfluencerDashboard() {
   const [influencers, setInfluencers] = useState<Influencer[]>([])
@@ -9,6 +10,16 @@ export default function InfluencerDashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [donations, setDonations] = useState<Donation[]>([])
   const [loading, setLoading] = useState(true)
+  const [unlockedInfluencerIds, setUnlockedInfluencerIds] = useState<Set<number>>(() => {
+    const raw = sessionStorage.getItem('influencer_unlocked_ids')
+    if (!raw) return new Set()
+    try {
+      const parsed = JSON.parse(raw) as number[]
+      return new Set(parsed)
+    } catch {
+      return new Set()
+    }
+  })
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
@@ -21,10 +32,10 @@ export default function InfluencerDashboard() {
   }, [])
 
   useEffect(() => {
-    if (selectedInfluencer) {
-      loadInfluencerData(selectedInfluencer.id)
-    }
-  }, [selectedInfluencer])
+    if (!selectedInfluencer) return
+    if (!unlockedInfluencerIds.has(selectedInfluencer.id)) return
+    loadInfluencerData(selectedInfluencer.id)
+  }, [selectedInfluencer, unlockedInfluencerIds])
 
   async function loadInfluencers() {
     try {
@@ -150,6 +161,51 @@ export default function InfluencerDashboard() {
           <p className="text-surface-600">Loading dashboard...</p>
         </div>
       </div>
+    )
+  }
+
+  if (selectedInfluencer && !unlockedInfluencerIds.has(selectedInfluencer.id)) {
+    return (
+      <>
+        <nav className="bg-white shadow-sm border-b border-surface-200">
+          <div className="container-page">
+            <div className="flex justify-between h-16 items-center">
+              <Link to="/" className="text-xl font-bold text-gradient font-display">
+                Donation Platform
+              </Link>
+              <div className="flex items-center gap-4">
+                {influencers.length > 0 && (
+                  <select
+                    value={selectedInfluencer?.id || ''}
+                    onChange={(e) => {
+                      const inf = influencers.find(i => i.id === parseInt(e.target.value))
+                      setSelectedInfluencer(inf || null)
+                    }}
+                    className="input w-48"
+                  >
+                    {influencers.map((inf) => (
+                      <option key={inf.id} value={inf.id}>{inf.name}</option>
+                    ))}
+                  </select>
+                )}
+                <span className="badge badge-secondary">Influencer Portal</span>
+              </div>
+            </div>
+          </div>
+        </nav>
+        <PasswordGate
+          title={`${selectedInfluencer.name}`}
+          subtitle="Enter this influencer account password to continue."
+          submitLabel="Enter"
+          onVerify={async (password) => {
+            await authApi.verifyInfluencer(selectedInfluencer.id, password)
+            const next = new Set(unlockedInfluencerIds)
+            next.add(selectedInfluencer.id)
+            sessionStorage.setItem('influencer_unlocked_ids', JSON.stringify(Array.from(next)))
+            setUnlockedInfluencerIds(next)
+          }}
+        />
+      </>
     )
   }
 
@@ -351,7 +407,7 @@ export default function InfluencerDashboard() {
                     {donations.slice(0, 10).map((donation) => (
                       <div key={donation.id} className="flex items-center justify-between py-3 border-b border-surface-100 last:border-0">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-full flex items-center justify-center">
+                          <div className="w-10 h-10 bg-linear-to-br from-primary-100 to-secondary-100 rounded-full flex items-center justify-center">
                             <span className="text-sm font-semibold text-primary-700">
                               {donation.donor?.name?.charAt(0) || '?'}
                             </span>

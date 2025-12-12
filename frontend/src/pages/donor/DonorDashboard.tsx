@@ -1,13 +1,24 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { campaignsApi, donorsApi, donationsApi } from '../../api/client'
+import { authApi, campaignsApi, donorsApi, donationsApi } from '../../api/client'
 import type { Campaign, Donor, CreateDonation } from '../../api/client'
+import PasswordGate from '../../components/PasswordGate'
 
 export default function DonorDashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [donors, setDonors] = useState<Donor[]>([])
   const [selectedDonor, setSelectedDonor] = useState<Donor | null>(null)
   const [loading, setLoading] = useState(true)
+  const [unlockedDonorIds, setUnlockedDonorIds] = useState<Set<number>>(() => {
+    const raw = sessionStorage.getItem('donor_unlocked_ids')
+    if (!raw) return new Set()
+    try {
+      const parsed = JSON.parse(raw) as number[]
+      return new Set(parsed)
+    } catch {
+      return new Set()
+    }
+  })
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [showDonateModal, setShowDonateModal] = useState(false)
@@ -15,7 +26,7 @@ export default function DonorDashboard() {
   const [donationForm, setDonationForm] = useState({ amount: '', message: '' })
   const [submitting, setSubmitting] = useState(false)
   const [showNewDonorForm, setShowNewDonorForm] = useState(false)
-  const [newDonorForm, setNewDonorForm] = useState({ name: '', email: '' })
+  const [newDonorForm, setNewDonorForm] = useState({ name: '', email: '', password: '' })
 
   useEffect(() => {
     loadData()
@@ -46,8 +57,12 @@ export default function DonorDashboard() {
       const newDonor = await donorsApi.create(newDonorForm)
       setDonors([newDonor, ...donors])
       setSelectedDonor(newDonor)
+      const next = new Set(unlockedDonorIds)
+      next.add(newDonor.id)
+      sessionStorage.setItem('donor_unlocked_ids', JSON.stringify(Array.from(next)))
+      setUnlockedDonorIds(next)
       setShowNewDonorForm(false)
-      setNewDonorForm({ name: '', email: '' })
+      setNewDonorForm({ name: '', email: '', password: '' })
     } catch (error) {
       console.error('Failed to create donor:', error)
       alert('Failed to create account. Email might already be in use.')
@@ -123,6 +138,66 @@ export default function DonorDashboard() {
     )
   }
 
+  if (selectedDonor && !unlockedDonorIds.has(selectedDonor.id)) {
+    return (
+      <>
+        <nav className="bg-white shadow-sm border-b border-surface-200">
+          <div className="container-page">
+            <div className="flex justify-between h-16 items-center">
+              <Link to="/" className="text-xl font-bold text-gradient font-display">
+                Donation Platform
+              </Link>
+              <div className="flex items-center gap-4">
+                {selectedDonor ? (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedDonor.id}
+                      onChange={(e) => {
+                        const donor = donors.find(d => d.id === parseInt(e.target.value))
+                        setSelectedDonor(donor || null)
+                      }}
+                      className="input w-40"
+                    >
+                      {donors.map((donor) => (
+                        <option key={donor.id} value={donor.id}>{donor.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => setShowNewDonorForm(true)}
+                      className="btn btn-ghost text-sm"
+                    >
+                      + New
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowNewDonorForm(true)}
+                    className="btn btn-outline"
+                  >
+                    Create Account
+                  </button>
+                )}
+                <span className="badge badge-success">Donor Portal</span>
+              </div>
+            </div>
+          </div>
+        </nav>
+        <PasswordGate
+          title={`${selectedDonor.name}`}
+          subtitle="Enter this donor account password to continue."
+          submitLabel="Enter"
+          onVerify={async (password) => {
+            await authApi.verifyDonor(selectedDonor.id, password)
+            const next = new Set(unlockedDonorIds)
+            next.add(selectedDonor.id)
+            sessionStorage.setItem('donor_unlocked_ids', JSON.stringify(Array.from(next)))
+            setUnlockedDonorIds(next)
+          }}
+        />
+      </>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-surface-50">
       <nav className="bg-white shadow-sm border-b border-surface-200">
@@ -179,7 +254,7 @@ export default function DonorDashboard() {
             <h2 className="text-lg font-semibold text-surface-950 mb-4 font-display">My Recent Donations</h2>
             <div className="flex gap-4 overflow-x-auto pb-2">
               {selectedDonor.donations.slice(0, 5).map((donation) => (
-                <div key={donation.id} className="flex-shrink-0 bg-surface-50 rounded-lg p-4 min-w-[200px]">
+                <div key={donation.id} className="shrink-0 bg-surface-50 rounded-lg p-4 min-w-[200px]">
                   <p className="font-semibold text-success-600">{formatCurrency(donation.amount)}</p>
                   <p className="text-sm text-surface-600 truncate">{donation.campaign?.title}</p>
                 </div>
@@ -218,7 +293,7 @@ export default function DonorDashboard() {
         {displayCampaigns.length === 0 ? (
           <div className="card p-8 text-center">
             <div className="max-w-sm mx-auto">
-              <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-full mx-auto mb-6 flex items-center justify-center">
+              <div className="w-20 h-20 bg-linear-to-br from-primary-100 to-secondary-100 rounded-full mx-auto mb-6 flex items-center justify-center">
                 <svg className="w-10 h-10 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                 </svg>
@@ -246,7 +321,7 @@ export default function DonorDashboard() {
             {displayCampaigns.map((campaign) => (
               <div key={campaign.id} className="card card-hover overflow-hidden flex flex-col">
                 {/* Campaign Header with Gradient */}
-                <div className="h-32 bg-gradient-to-br from-primary-500 to-secondary-500 relative">
+                <div className="h-32 bg-linear-to-br from-primary-500 to-secondary-500 relative">
                   <div className="absolute inset-0 bg-black/10"></div>
                   <div className="absolute bottom-4 left-4 right-4">
                     <span className={`badge ${
@@ -430,13 +505,24 @@ export default function DonorDashboard() {
                     required
                   />
                 </div>
+                <div>
+                  <label className="label">Password</label>
+                  <input
+                    type="password"
+                    value={newDonorForm.password}
+                    onChange={(e) => setNewDonorForm({ ...newDonorForm, password: e.target.value })}
+                    className="input"
+                    placeholder="Create a password"
+                    required
+                  />
+                </div>
               </div>
               <div className="p-6 border-t border-surface-200 flex gap-3 justify-end">
                 <button
                   type="button"
                   onClick={() => {
                     setShowNewDonorForm(false)
-                    setNewDonorForm({ name: '', email: '' })
+                    setNewDonorForm({ name: '', email: '', password: '' })
                   }}
                   className="btn btn-ghost"
                 >

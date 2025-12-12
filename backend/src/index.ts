@@ -7,6 +7,7 @@ import {
   donorsRouter,
   donationsRouter,
   statsRouter,
+  authRouter,
 } from './routers';
 
 const app = express();
@@ -22,6 +23,7 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/donors', donorsRouter);
 app.use('/api/donations', donationsRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/auth', authRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

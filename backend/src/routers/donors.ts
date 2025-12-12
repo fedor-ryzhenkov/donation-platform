@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Donor, Donation, Campaign } from '../models';
+import { hashPassword } from '../auth/password';
 
 const router = Router();
 
@@ -14,8 +15,21 @@ router.get('/', async (_req: Request, res: Response) => {
 
 // POST /api/donors - Create donor
 router.post('/', async (req: Request, res: Response) => {
-  const { name, email } = req.body;
-  const donor = await Donor.create({ name, email });
+  const { name, email, password } = req.body as { name?: string; email?: string; password?: string };
+  if (typeof name !== 'string' || name.length === 0) {
+    res.status(400).json({ error: 'Name is required' });
+    return;
+  }
+  if (typeof email !== 'string' || email.length === 0) {
+    res.status(400).json({ error: 'Email is required' });
+    return;
+  }
+  if (typeof password !== 'string' || password.length === 0) {
+    res.status(400).json({ error: 'Password is required' });
+    return;
+  }
+  const { salt, hash } = hashPassword(password);
+  const donor = await Donor.create({ name, email, passwordSalt: salt, passwordHash: hash });
   res.status(201).json(donor);
 });
 
@@ -38,8 +52,13 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Donor not found' });
     return;
   }
-  const { name, email } = req.body;
-  await donor.update({ name, email });
+  const { name, email, password } = req.body as { name?: string; email?: string; password?: string };
+  if (typeof password === 'string' && password.length > 0) {
+    const { salt, hash } = hashPassword(password);
+    await donor.update({ name, email, passwordSalt: salt, passwordHash: hash });
+  } else {
+    await donor.update({ name, email });
+  }
   res.json(donor);
 });
 

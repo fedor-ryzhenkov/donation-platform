@@ -6,6 +6,8 @@ interface InfluencerAttributes {
   name: string;
   bio: string;
   avatarUrl: string;
+  passwordHash: string;
+  passwordSalt: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -17,6 +19,8 @@ export class Influencer extends Model<InfluencerAttributes, InfluencerCreationAt
   public name!: string;
   public bio!: string;
   public avatarUrl!: string;
+  public passwordHash!: string;
+  public passwordSalt!: string;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -43,10 +47,25 @@ Influencer.init(
       defaultValue: '',
       field: 'avatar_url',
     },
+    passwordHash: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      defaultValue: '',
+      field: 'password_hash',
+    },
+    passwordSalt: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      defaultValue: '',
+      field: 'password_salt',
+    },
   },
   {
     sequelize,
     tableName: 'influencers',
     underscored: true,
+    defaultScope: {
+      attributes: { exclude: ['passwordHash', 'passwordSalt'] },
+    },
   }
 );

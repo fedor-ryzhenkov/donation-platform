@@ -5,6 +5,8 @@ interface DonorAttributes {
   id: number;
   name: string;
   email: string;
+  passwordHash: string;
+  passwordSalt: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -15,6 +17,8 @@ export class Donor extends Model<DonorAttributes, DonorCreationAttributes> imple
   public id!: number;
   public name!: string;
   public email!: string;
+  public passwordHash!: string;
+  public passwordSalt!: string;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -35,10 +39,25 @@ Donor.init(
       allowNull: false,
       unique: true,
     },
+    passwordHash: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      defaultValue: '',
+      field: 'password_hash',
+    },
+    passwordSalt: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      defaultValue: '',
+      field: 'password_salt',
+    },
   },
   {
     sequelize,
     tableName: 'donors',
     underscored: true,
+    defaultScope: {
+      attributes: { exclude: ['passwordHash', 'passwordSalt'] },
+    },
   }
 );

@@ -1,8 +1,11 @@
-import { initDatabase, sequelize } from './database';
+import { sequelize } from './database';
 import { Influencer, Campaign, Donor, Donation } from './models';
+import { hashPassword } from './auth/password';
 
 async function seed() {
-  await initDatabase();
+  // For seeding, we want a schema reset so new/changed columns exist without using `alter`.
+  await sequelize.sync({ force: true });
+  console.log('Database synchronized');
 
   // Clear existing data
   await Donation.destroy({ where: {} });
@@ -11,21 +14,39 @@ async function seed() {
   await Influencer.destroy({ where: {} });
 
   // Create Influencers
+  const influencerPasswords = {
+    'Alex Gaming': 'alex123',
+    'Sarah Tech': 'sarah123',
+    'Mike Fitness': 'mike123',
+  } as const;
+
   const influencers = await Influencer.bulkCreate([
     {
       name: 'Alex Gaming',
       bio: 'Professional streamer and content creator focused on gaming tutorials and entertainment.',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=alex',
+      ...(() => {
+        const { salt, hash } = hashPassword(influencerPasswords['Alex Gaming']);
+        return { passwordSalt: salt, passwordHash: hash };
+      })(),
     },
     {
       name: 'Sarah Tech',
       bio: 'Tech reviewer and educator helping people navigate the digital world.',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah',
+      ...(() => {
+        const { salt, hash } = hashPassword(influencerPasswords['Sarah Tech']);
+        return { passwordSalt: salt, passwordHash: hash };
+      })(),
     },
     {
       name: 'Mike Fitness',
       bio: 'Fitness coach sharing workout routines and nutrition tips for a healthier lifestyle.',
       avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=mike',
+      ...(() => {
+        const { salt, hash } = hashPassword(influencerPasswords['Mike Fitness']);
+        return { passwordSalt: salt, passwordHash: hash };
+      })(),
     },
   ]);
 
@@ -66,12 +87,40 @@ async function seed() {
   ]);
 
   // Create Donors
+  const donorPasswords = {
+    'john@example.com': 'john123',
+    'emily@example.com': 'emily123',
+    'david@example.com': 'david123',
+    'lisa@example.com': 'lisa123',
+    'chris@example.com': 'chris123',
+  } as const;
+
   const donors = await Donor.bulkCreate([
-    { name: 'John Smith', email: 'john@example.com' },
-    { name: 'Emily Johnson', email: 'emily@example.com' },
-    { name: 'David Wilson', email: 'david@example.com' },
-    { name: 'Lisa Brown', email: 'lisa@example.com' },
-    { name: 'Chris Lee', email: 'chris@example.com' },
+    (() => {
+      const email = 'john@example.com';
+      const { salt, hash } = hashPassword(donorPasswords[email]);
+      return { name: 'John Smith', email, passwordSalt: salt, passwordHash: hash };
+    })(),
+    (() => {
+      const email = 'emily@example.com';
+      const { salt, hash } = hashPassword(donorPasswords[email]);
+      return { name: 'Emily Johnson', email, passwordSalt: salt, passwordHash: hash };
+    })(),
+    (() => {
+      const email = 'david@example.com';
+      const { salt, hash } = hashPassword(donorPasswords[email]);
+      return { name: 'David Wilson', email, passwordSalt: salt, passwordHash: hash };
+    })(),
+    (() => {
+      const email = 'lisa@example.com';
+      const { salt, hash } = hashPassword(donorPasswords[email]);
+      return { name: 'Lisa Brown', email, passwordSalt: salt, passwordHash: hash };
+    })(),
+    (() => {
+      const email = 'chris@example.com';
+      const { salt, hash } = hashPassword(donorPasswords[email]);
+      return { name: 'Chris Lee', email, passwordSalt: salt, passwordHash: hash };
+    })(),
   ]);
 
   // Create Donations
@@ -98,6 +147,10 @@ async function seed() {
   console.log(`- ${campaigns.length} campaigns`);
   console.log(`- ${donors.length} donors`);
   console.log(`- ${donationData.length} donations`);
+  console.log('Seed passwords:');
+  console.log('- Admin: set env ADMIN_PASSWORD (defaults to "admin")');
+  console.log('- Influencers: Alex Gaming=alex123, Sarah Tech=sarah123, Mike Fitness=mike123');
+  console.log('- Donors: john123, emily123, david123, lisa123, chris123 (match seeded emails)');
 
   await sequelize.close();
 }

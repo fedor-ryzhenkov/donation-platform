@@ -1,20 +1,23 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { statsApi, donationsApi, campaignsApi, influencersApi } from '../../api/client'
+import { authApi, statsApi, donationsApi, campaignsApi, influencersApi } from '../../api/client'
 import type { Stats, Donation, Campaign, Influencer } from '../../api/client'
+import PasswordGate from '../../components/PasswordGate'
 
 export default function AdminDashboard() {
+  const initialUnlocked = sessionStorage.getItem('admin_unlocked') === 'true'
+  const [unlocked, setUnlocked] = useState(initialUnlocked)
   const [stats, setStats] = useState<Stats | null>(null)
   const [donations, setDonations] = useState<Donation[]>([])
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [influencers, setInfluencers] = useState<Influencer[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(initialUnlocked)
   const [activeTab, setActiveTab] = useState<'donations' | 'campaigns' | 'influencers'>('donations')
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => {
-    loadData()
-  }, [])
+    if (unlocked) loadData()
+  }, [unlocked])
 
   async function loadData() {
     try {
@@ -98,6 +101,22 @@ export default function AdminDashboard() {
       hour: '2-digit',
       minute: '2-digit',
     })
+  }
+
+  if (!unlocked) {
+    return (
+      <PasswordGate
+        title="Admin Dashboard"
+        subtitle="Enter the admin password to continue."
+        submitLabel="Enter"
+        onVerify={async (password) => {
+          await authApi.verifyAdmin(password)
+          sessionStorage.setItem('admin_unlocked', 'true')
+          setUnlocked(true)
+          setLoading(true)
+        }}
+      />
+    )
   }
 
   if (loading) {

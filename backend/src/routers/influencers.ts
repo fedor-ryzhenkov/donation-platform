@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Influencer, Campaign } from '../models';
+import { hashPassword } from '../auth/password';
 
 const router = Router();
 
@@ -14,8 +15,28 @@ router.get('/', async (_req: Request, res: Response) => {
 
 // POST /api/influencers - Create influencer
 router.post('/', async (req: Request, res: Response) => {
-  const { name, bio, avatarUrl } = req.body;
-  const influencer = await Influencer.create({ name, bio, avatarUrl });
+  const { name, bio, avatarUrl, password } = req.body as {
+    name?: string;
+    bio?: string;
+    avatarUrl?: string;
+    password?: string;
+  };
+  if (typeof name !== 'string' || name.length === 0) {
+    res.status(400).json({ error: 'Name is required' });
+    return;
+  }
+  if (typeof password !== 'string' || password.length === 0) {
+    res.status(400).json({ error: 'Password is required' });
+    return;
+  }
+  const { salt, hash } = hashPassword(password);
+  const influencer = await Influencer.create({
+    name,
+    bio: typeof bio === 'string' ? bio : '',
+    avatarUrl: typeof avatarUrl === 'string' ? avatarUrl : '',
+    passwordSalt: salt,
+    passwordHash: hash,
+  });
   res.status(201).json(influencer);
 });
 
@@ -38,8 +59,18 @@ router.put('/:id', async (req: Request, res: Response) => {
     res.status(404).json({ error: 'Influencer not found' });
     return;
   }
-  const { name, bio, avatarUrl } = req.body;
-  await influencer.update({ name, bio, avatarUrl });
+  const { name, bio, avatarUrl, password } = req.body as {
+    name?: string;
+    bio?: string;
+    avatarUrl?: string;
+    password?: string;
+  };
+  if (typeof password === 'string' && password.length > 0) {
+    const { salt, hash } = hashPassword(password);
+    await influencer.update({ name, bio, avatarUrl, passwordSalt: salt, passwordHash: hash });
+  } else {
+    await influencer.update({ name, bio, avatarUrl });
+  }
   res.json(influencer);
 });
 
